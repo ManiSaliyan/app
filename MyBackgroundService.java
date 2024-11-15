@@ -12,7 +12,33 @@ import android.os.IBinder;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
+import android.location.Location;
+import android.location.LocationManager;
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.os.Looper;
+import android.provider.Settings;
+
+
+
 public class MyForegroundService extends Service {
+    FusedLocationProviderClient mFusedLocationClient;
+    int PERMISSION_ID = 44;
     private static final String CHANNEL_ID = "ForegroundServiceChannel";
     private Handler handler;
     private HandlerThread handlerThread;
@@ -41,20 +67,78 @@ public class MyForegroundService extends Service {
         handler.post(new Runnable() {
             @Override
             public void run() {
-                performTask();
+                getLocation();
                 handler.postDelayed(this, 5000); // Re-run every 5 seconds
             }
         });
         return START_STICKY;
     }
+ 
+    private void getLocation(){
+          mFusedLocationClient.getLastLocation().addOnCompleteListener(new OnCompleteListener<Location>() {
+                    @Override
+                    public void onComplete(@NonNull Task<Location> task) {
+                        Location location = task.getResult();
+                        if (location == null) {
+                            requestNewLocationData();
+                        } else {
+                            lolat = location.getLatitude();
+                            lolon = location.getLongitude();
+                            sendLoc(lolat,lolon);
+                        }
+                    }
+                });
+    }
+    private void sendLoc(double longi,double lat) throws IOException {
+		String post_url = "https://w-safety-chi.vercel.app/update/"+lat+"/"+longi;
+		URL obj = new URL(post_url);
+		HttpURLConnection con = (HttpURLConnection) obj.openConnection();
+		con.setRequestMethod("GET");
+		int responseCode = con.getResponseCode();
+		System.out.println("GET Response Code :: " + responseCode);
+		if (responseCode == HttpURLConnection.HTTP_OK) { // success
+			BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
+			String inputLine;
+			StringBuffer response = new StringBuffer();
 
-    private void performTask() {
-        // Example task: print a log statement
-        // Replace with your actual task logic
-        System.out.println("Performing background task in service...");
-        // You could add network requests, data processing, etc., here
+			while ((inputLine = in.readLine()) != null) {
+				response.append(inputLine);
+			}
+			in.close();
+
+			// print result
+			System.out.println(response.toString());
+		} else {
+			System.out.println("GET request did not work.");
+		}
+
+    }
+    private void requestNewLocationData() {
+
+        // Initializing LocationRequest
+        // object with appropriate methods
+        LocationRequest mLocationRequest = new LocationRequest();
+        mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+        mLocationRequest.setInterval(5);
+        mLocationRequest.setFastestInterval(0);
+        mLocationRequest.setNumUpdates(1);
+
+        // setting LocationRequest
+        // on FusedLocationClient
+        mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+        mFusedLocationClient.requestLocationUpdates(mLocationRequest, mLocationCallback, Looper.myLooper());
     }
 
+    private LocationCallback mLocationCallback = new LocationCallback() {
+
+        @Override
+        public void onLocationResult(LocationResult locationResult) {
+            Location mLastLocation = locationResult.getLastLocation();
+            lolat = mLastLocation.getLatitude();
+            lolon = mLastLocation.getLongitude();
+            sendLoc(lolat,lolon);
+        }
+    };
     @Override
     public void onDestroy() {
         super.onDestroy();
