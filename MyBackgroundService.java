@@ -39,6 +39,7 @@ import android.provider.Settings;
 public class MyForegroundService extends Service {
     FusedLocationProviderClient mFusedLocationClient;
     int PERMISSION_ID = 44;
+    double lolat,lolon;
     private static final String CHANNEL_ID = "ForegroundServiceChannel";
     private Handler handler;
     private HandlerThread handlerThread;
